@@ -4,3 +4,5 @@ pandas
 openpyxl
 Pillow
 st-gsheets-connection
+gspread
+google-auth
