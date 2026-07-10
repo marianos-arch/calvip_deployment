@@ -54,16 +54,18 @@ def load_data():
 def save_dataframe_to_gsheet(df_to_save):
     if sheet_api_client is not None:
         try:
-            # 1. Pull the live text array from the sheet to locate the exact row index of "END"
-            raw_ids = sheet_api_client.col_values(1) # Gets all values from the first column (Id)
+            # 1. Fetch all raw data from the first column (Id) to map active entries
+            raw_ids = sheet_api_client.col_values(1)
             
-            end_row_number = None
+            # 2. Find the last verifiable numeric entry row index
+            last_entry_row_idx = None
             for idx, val in enumerate(raw_ids):
-                if str(val).strip().upper() == "END":
-                    end_row_number = idx + 1 # Google Sheets is 1-indexed
-                    break
+                cleaned_val = str(val).strip()
+                # Check if the cell contains a digit/number (verifiable entry)
+                if cleaned_val.isdigit():
+                    last_entry_row_idx = idx + 1 # Convert to 1-indexed for Google Sheets
             
-            # 2. Grab only the very last row appended to our Dataframe (the one the user just typed)
+            # 3. Grab only the very last row appended to our memory Dataframe
             new_entry = df_to_save.iloc[-1].copy()
             
             # Format the date cleanly before pushing
@@ -73,20 +75,21 @@ def save_dataframe_to_gsheet(df_to_save):
             new_entry = new_entry.fillna("")
             new_row_payload = new_entry.values.tolist()
             
-            if end_row_number is not None:
-                # 🌟 INJECT A NEW ROW DIRECTLY ABOVE THE "END" MARKER ROW
-                # This automatically pushes row 14 to row 15, preserving everything below it!
-                sheet_api_client.insert_row(new_row_payload, index=end_row_number, value_input_option="USER_ENTERED")
+            # 4. Insert directly after the last verified data row
+            if last_entry_row_idx is not None:
+                insert_target_idx = last_entry_row_idx + 1
+                # 🌟 INJECTS DIRECTLY AFTER YOUR LAST NUMBERED ROW
+                sheet_api_client.insert_row(new_row_payload, index=insert_target_idx, value_input_option="USER_ENTERED")
             else:
-                # Fallback safeguard: if "END" went missing, append at the absolute bottom
-                sheet_api_client.append_row(new_row_payload, value_input_option="USER_ENTERED")
+                # Fallback safeguard: if no numeric entries exist yet, place right below the header (Row 2)
+                sheet_api_client.insert_row(new_row_payload, index=2, value_input_option="USER_ENTERED")
                 
             return True
             
         except Exception as e:
             st.error(f"Error updating deployment logs: {e}")
             return False
-    return False  
+    return False
     
 # --- FETCH DATA ---
 df_deployments, sheet_api_client = load_data()
