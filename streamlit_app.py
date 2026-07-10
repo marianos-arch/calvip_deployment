@@ -83,7 +83,9 @@ def save_notes_to_gsheet(df_notes_to_save, notes_api_client):
     if notes_api_client is not None:
         try:
             notes_api_client.clear()
-            notes_api_client.update([df_notes_to_save.columns.values.tolist()] + df_notes_to_save.values.tolist())
+            # Clean up missing metrics visually before sheet syncing
+            df_clean = df_notes_to_save.fillna("")
+            notes_api_client.update(values=[df_clean.columns.values.tolist()] + df_clean.values.tolist())
             return True
         except Exception as e:
             st.error(f"Error saving field logs: {e}")
@@ -94,7 +96,7 @@ def save_notes_to_gsheet(df_notes_to_save, notes_api_client):
 df_deployments, sheet_api_client = load_data()
 df_notes, sheet_notes_client = load_notes_data()
 
-# Clean and normalize columns
+# Clean and normalize columns securely
 if not df_deployments.empty:
     if 'outreach_date' in df_deployments.columns:
         df_deployments['outreach_date'] = pd.to_datetime(df_deployments['outreach_date'], errors='coerce')
@@ -106,6 +108,9 @@ def save_dataframe_to_gsheet(df_to_save):
             df_copy = df_to_save.copy()
             if 'outreach_date' in df_copy.columns:
                 df_copy['outreach_date'] = df_copy['outreach_date'].dt.strftime('%Y-%m-%d')
+            
+            # Replaces null objects with blank values so JSON payloads can serialize smoothly
+            df_copy = df_copy.fillna("")
             
             sheet_api_client.clear()
             sheet_api_client.update(values=[df_copy.columns.values.tolist()] + df_copy.values.tolist())
@@ -145,7 +150,7 @@ if supervisor_password:
 
 HAS_EDIT_ACCESS = IS_ADMIN or IS_SUPERVISOR
 
-# --- UPDATED DROPDOWN CONTROLS (Based on Boss's Feedback) ---
+# --- UPDATED DROPDOWN CONTROLS ---
 RISK_OPTIONS = ["Gun Shot Wound (GSW)", "Assault", "Stabbing"]
 INTEL_OPTIONS = ["ShotSpotter", "BPD Intel", "HBVI Intel", "Community Intelligence"]
 NEIGHBORHOOD_OPTIONS = ["East Bakersfield", "Southeast Bakersfield", "Central Bakersfield", "Oildale", "Delano", "Other"]
@@ -167,7 +172,7 @@ def get_pill_html(text):
 st.title("𝄃 CVI Strategic Outreach & Deployment Dashboard")
 st.write("Coordinating community violence intervention street deployment metrics based on intelligence data grids.")
 
-# --- METRICS SECTION (Total Volume of Community Impact) ---
+# --- METRICS SECTION ---
 st.markdown("### 📊 High-Impact Footprint Summary")
 col1, col2, col3, col4 = st.columns(4)
 
@@ -186,7 +191,7 @@ col4.metric(label="Total Hours on the Block", value=f"{total_hours} hrs")
 
 st.markdown("---")
 
-# --- TAB DEFINITIONS ---
+# --- SAFE TAB ALLOCATION SYSTEM ---
 tabs_list = ["🎯 Active Operational Views", "🔍 Detailed Search & Edit Logs"]
 if IS_ADMIN:
     tabs_list.append("➕ Log New Deployment Zone")
@@ -201,7 +206,6 @@ with tab1:
     if df_deployments.empty:
         st.info("No deployments registered in the sheet.")
     else:
-        # Sort by latest date
         latest_deployments = df_deployments.sort_values(by="outreach_date", ascending=False).head(5)
         for idx, row in latest_deployments.iterrows():
             with st.container(border=True):
@@ -250,7 +254,8 @@ with tab2:
         st.markdown("---")
 
         for idx, row in filtered_df.iterrows():
-            with st.expander(f"📍 {row['location']} ({row['risk_type']}) — {row['outreach_date'].strftime('%Y-%m-%d') if pd.notna(row['outreach_date']) else ''}"):
+            formatted_date = row['outreach_date'].strftime('%Y-%m-%d') if pd.notna(row['outreach_date']) else ''
+            with st.expander(f"📍 {row['location']} ({row['risk_type']}) — {formatted_date}"):
                 if HAS_EDIT_ACCESS:
                     with st.form(key=f"edit_form_{idx}"):
                         e_loc = st.text_input("Location / Neighborhood", value=row['location'])
@@ -304,17 +309,19 @@ if IS_ADMIN and tab3 is not None:
                 n_hours = st.number_input("Hours Spent on Site", min_value=0.0, step=0.5, value=1.0)
             
             n_date = st.date_input("Deployment Date", datetime.date.today())
-            n_concerns = st.text_area("Why was outreach conducted? (Share services, listen to safety issues, resident counts, historical homicide worries)")
+            n_concerns = st.text_area("Why was outreach conducted?")
             
             submit_new = st.form_submit_button("Submit Deployment to Tracker")
             
             if submit_new and n_loc:
                 next_id = int(df_deployments['id'].max() + 1) if not df_deployments.empty and 'id' in df_deployments.columns else 1
+                
                 new_row = {
                     "id": next_id,
                     "location": n_loc,
                     "risk_type": n_risk,
-                    "outreach_date": n_date.strftime('%Y-%m-%d'),
+                    # We cast this item directly as a Timestamp to safely match Pandas types
+                    "outreach_date": pd.to_datetime(n_date), 
                     "intel_source": n_intel,
                     "members_engaged": n_engaged,
                     "staff_count": n_staff,
@@ -331,3 +338,4 @@ if IS_ADMIN and tab3 is not None:
                     st.cache_data.clear()
                     st.success("New deployment successfully appended to Google Sheet!")
                     st.rerun()
+                    
