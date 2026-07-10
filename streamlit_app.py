@@ -11,7 +11,7 @@ st.set_page_config(page_title="CVI Strategic Outreach Tracker", page_icon="🚓"
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_role" not in st.session_state:
-    st.session_state.user_role = None  # Can be "Admin" or "Supervisor"
+    st.session_state.user_role = None  # Tracks "Admin" or "Supervisor"
 
 # --- DATABASE CONNECTION (Google Sheets via Dynamic Secrets & gspread) ---
 @st.cache_data(ttl=0)  
@@ -50,47 +50,13 @@ def load_data():
         st.error(f"Failed to connect to Deployment sheet: {e}")
         return pd.DataFrame(), None
 
-@st.cache_data(ttl=0)
-def load_notes_data():
-    try:
-        raw_key = st.secrets["connections"]["gsheets"]["private_key"]
-        private_key = raw_key.replace("\\n", "\n")
-        while "\n\n" in private_key:
-            private_key = private_key.replace("\n\n", "\n")
-
-        info = {
-            "type": "service_account",
-            "project_id": st.secrets["connections"]["gsheets"]["project_id"],
-            "private_key_id": st.secrets["connections"]["gsheets"]["private_key_id"],
-            "private_key": private_key,
-            "client_email": st.secrets["connections"]["gsheets"]["client_email"],
-            "client_id": st.secrets["connections"]["gsheets"]["client_id"],
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": st.secrets["connections"]["gsheets"]["client_x509_cert_url"],
-            "universe_domain": "googleapis.com"
-        }
-
-        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(info, scopes=scopes)
-        client = gspread.authorize(creds)
-
-        spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-        notes_sheet = client.open_by_url(spreadsheet_url).worksheet("Notes")
-        
-        data = notes_sheet.get_all_records()
-        return pd.DataFrame(data), notes_sheet
-    except Exception as e:
-        return pd.DataFrame(), None
-
 # --- WRITE BACK VIA GSPREAD ---
 def save_dataframe_to_gsheet(df_to_save):
     if sheet_api_client is not None:
         try:
             df_copy = df_to_save.copy()
-            if 'outreach_date' in df_copy.columns:
-                df_copy['outreach_date'] = df_copy['outreach_date'].dt.strftime('%Y-%m-%d')
+            if 'Date' in df_copy.columns:
+                df_copy['Date'] = pd.to_datetime(df_copy['Date']).dt.strftime('%Y-%m-%d')
             
             df_copy = df_copy.fillna("")
             sheet_api_client.clear()
@@ -103,28 +69,15 @@ def save_dataframe_to_gsheet(df_to_save):
 
 # --- FETCH DATA ---
 df_deployments, sheet_api_client = load_data()
-df_notes, sheet_notes_client = load_notes_data()
 
 if not df_deployments.empty:
-    if 'outreach_date' in df_deployments.columns:
-        df_deployments['outreach_date'] = pd.to_datetime(df_deployments['outreach_date'], errors='coerce')
+    if 'Date' in df_deployments.columns:
+        df_deployments['Date'] = pd.to_datetime(df_deployments['Date'], errors='coerce')
 
-# --- DROPDOWN OPTIONS ---
-RISK_OPTIONS = ["Gun Shot Wound (GSW)", "Assault", "Stabbing"]
+# --- DROPDOWN OPTIONS MAPPED TO YOUR NEW CONFIGURATION ---
+LOCATION_OPTIONS = ["East Bakersfield", "Southeast Bakersfield", "Central Bakersfield", "Oildale", "Delano", "Other"]
+TRIGGER_OPTIONS = ["Gun Shot Wound (GSW)", "Assault", "Stabbing", "Shooting", "Community Tension", "Retaliatory Conflict"]
 INTEL_OPTIONS = ["ShotSpotter", "BPD Intel", "HBVI Intel", "Community Intelligence"]
-NEIGHBORHOOD_OPTIONS = ["East Bakersfield", "Southeast Bakersfield", "Central Bakersfield", "Oildale", "Delano", "Other"]
-
-def get_pill_html(text):
-    colors = {
-        "Gun Shot Wound (GSW)": {"bg": "#fee2e2", "text": "#991b1b"},
-        "Assault": {"bg": "#fef9c3", "text": "#854d0e"},
-        "Stabbing": {"bg": "#ffedd5", "text": "#c2410c"},
-        "ShotSpotter": {"bg": "#e0f2fe", "text": "#0369a1"},
-        "BPD Intel": {"bg": "#e0e7ff", "text": "#3730a3"},
-        "HBVI Intel": {"bg": "#f3e8ff", "text": "#6b21a8"}
-    }
-    cfg = colors.get(text, {"bg": "#e2e8f0", "text": "#1e293b"})
-    return f'<span style="background-color: {cfg["bg"]}; color: {cfg["text"]}; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-right: 4px; display: inline-block;">{text}</span>'
 
 
 # =========================================================================
@@ -132,7 +85,6 @@ def get_pill_html(text):
 # =========================================================================
 if not st.session_state.logged_in:
     st.markdown("<h2 style='text-align: center;'>🔐 CVI Operational Gateway</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #6b7280;'>Please authenticate to open the intake sheets and tracker systems.</p>", unsafe_allow_html=True)
     
     _, auth_col, _ = st.columns([1, 2, 1])
     with auth_col:
@@ -145,7 +97,7 @@ if not st.session_state.logged_in:
                     admin_pass = st.secrets["ADMIN_PASSWORD"]
                     super_pass = st.secrets["SUPERVISOR_PASSWORD"]
                 except KeyError:
-                    admin_pass, super_pass = "admin123", "super123" # Fallbacks for local environment
+                    admin_pass, super_pass = "admin123", "super123"
                 
                 if input_password == admin_pass:
                     st.session_state.logged_in = True
@@ -169,20 +121,19 @@ if st.sidebar.button("Log Out / Lock Console"):
 
 
 # =========================================================================
-# 📊 APP MAIN DASHBOARD (UNLOCKED)
+# 📊 MAIN DASHBOARD SYSTEM
 # =========================================================================
 st.title("𝄃 CVI Strategic Outreach & Deployment Dashboard")
-st.write("Coordinating community violence intervention street deployment metrics based on intelligence data grids.")
 
-# --- METRICS HEADERS ---
+# --- HIGH IMPACT SUMMARY ---
 st.markdown("### 📊 High-Impact Footprint Summary")
 col1, col2, col3, col4 = st.columns(4)
 
 if not df_deployments.empty:
-    total_hot_zones = len(df_deployments['location'].dropna().unique())
-    total_engaged = int(pd.to_numeric(df_deployments['members_engaged'], errors='coerce').sum())
-    total_staff = int(pd.to_numeric(df_deployments['staff_count'], errors='coerce').sum())
-    total_hours = float(pd.to_numeric(df_deployments['hours_deployed'], errors='coerce').sum())
+    total_hot_zones = len(df_deployments['Location'].dropna().unique()) if 'Location' in df_deployments.columns else 0
+    total_engaged = int(pd.to_numeric(df_deployments['Community Member Engaged'], errors='coerce').sum()) if 'Community Member Engaged' in df_deployments.columns else 0
+    total_staff = int(pd.to_numeric(df_deployments['Staff Count Attended'], errors='coerce').sum()) if 'Staff Count Attended' in df_deployments.columns else 0
+    total_hours = float(pd.to_numeric(df_deployments['Total Hours Deployed'], errors='coerce').sum()) if 'Total Hours Deployed' in df_deployments.columns else 0
 else:
     total_hot_zones, total_engaged, total_staff, total_hours = 0, 0, 0, 0
 
@@ -193,63 +144,63 @@ col4.metric(label="Total Hours on the Block", value=f"{total_hours} hrs")
 
 st.markdown("---")
 
-# --- NEW TAB STRUCTURE ---
+# --- TAB LAYOUT SYSTEM ---
 tab1, tab2, tab3 = st.tabs([
     "➕ Log New Deployment Zone", 
     "🎯 Recent Intel Deployments", 
     "🔍 Search & Manage Field History"
 ])
 
-# --- TAB 1: FORM FIRST ---
+# --- TAB 1: NEW ENTRY FORM FIRST ---
 with tab1:
     st.header("➕ Record New Deployment Entry")
     
-    # Restrict form additions to Admin role if preferred, otherwise open to both
-    if st.session_state.user_role in ["Admin", "Supervisor"]:
-        with st.form("new_deployment_form", clear_on_submit=True):
-            n_loc = st.text_input("Location / Neighborhood Street (e.g. Panorama Drive)")
-            n_risk = st.selectbox("Triggering Risk Type", RISK_OPTIONS)
-            n_intel = st.selectbox("Strategic Intel Source", INTEL_OPTIONS)
+    with st.form("new_deployment_form", clear_on_submit=True):
+        n_loc = st.selectbox("Location", LOCATION_OPTIONS)
+        n_neigh = st.text_input("Neighborhood")
+        n_date = st.date_input("Date of Incident", datetime.date.today())
+        
+        n_trigger = st.selectbox("Trigger Incident", TRIGGER_OPTIONS)
+        n_intel = st.selectbox("Intel / Source", INTEL_OPTIONS)
+        
+        nc1, nc2, nc3 = st.columns(3)
+        with nc1:
+            n_engaged = st.number_input("Community Member Engaged", min_value=0, value=0)
+        with nc2:
+            n_staff = st.number_input("Staff Count Attended", min_value=1, value=1)
+        with nc3:
+            n_hours = st.number_input("Total Hours Deployed", min_value=0.0, step=0.5, value=1.0)
             
-            nc1, nc2, nc3 = st.columns(3)
-            with nc1:
-                n_engaged = st.number_input("Community Members Engaged", min_value=0, value=0)
-            with nc2:
-                n_staff = st.number_input("Staff Members Attending", min_value=1, value=1)
-            with nc3:
-                n_hours = st.number_input("Hours Spent on Site", min_value=0.0, step=0.5, value=1.0)
+        n_concerns = st.text_area("Community Concerns / Purpose")
+        
+        submit_new = st.form_submit_button("Submit Deployment to Tracker", use_container_width=True)
+        
+        if submit_new:
+            next_id = int(df_deployments['Id'].max() + 1) if not df_deployments.empty and 'Id' in df_deployments.columns else 1
             
-            n_date = st.date_input("Deployment Date", datetime.date.today())
-            n_concerns = st.text_area("Why was outreach conducted? (Share services, listen to safety issues, resident counts)")
+            new_row = {
+                "Id": next_id,
+                "Location": n_loc,
+                "Neighborhood": n_neigh,
+                "Date": pd.to_datetime(n_date), 
+                "Trigger Incident": n_trigger,
+                "Intel / Source": n_intel,
+                "Community Member Engaged": n_engaged,
+                "Staff Count Attended": n_staff,
+                "Total Hours Deployed": n_hours,
+                "Author": st.session_state.user_role, # Captures "Admin" or "Supervisor" directly from login
+                "Community Concerns / Purpose": n_concerns
+            }
             
-            submit_new = st.form_submit_button("Submit Deployment to Tracker", use_container_width=True)
+            if df_deployments.empty:
+                updated_df = pd.DataFrame([new_row])
+            else:
+                updated_df = pd.concat([df_deployments, pd.DataFrame([new_row])], ignore_index=True)
             
-            if submit_new and n_loc:
-                next_id = int(df_deployments['id'].max() + 1) if not df_deployments.empty and 'id' in df_deployments.columns else 1
-                
-                new_row = {
-                    "id": next_id,
-                    "location": n_loc,
-                    "risk_type": n_risk,
-                    "outreach_date": pd.to_datetime(n_date), 
-                    "intel_source": n_intel,
-                    "members_engaged": n_engaged,
-                    "staff_count": n_staff,
-                    "hours_deployed": n_hours,
-                    "community_concerns": n_concerns
-                }
-                
-                if df_deployments.empty:
-                    updated_df = pd.DataFrame([new_row])
-                else:
-                    updated_df = pd.concat([df_deployments, pd.DataFrame([new_row])], ignore_index=True)
-                
-                if save_dataframe_to_gsheet(updated_df):
-                    st.cache_data.clear()
-                    st.success("New deployment successfully appended to Google Sheet!")
-                    st.rerun()
-    else:
-        st.warning("Your credential clearance level does not authorize record appending access.")
+            if save_dataframe_to_gsheet(updated_df):
+                st.cache_data.clear()
+                st.success("New deployment data successfully pushed into Row 2 of your format sheet!")
+                st.rerun()
 
 # --- TAB 2: RECENT INTEL DEPLOYMENTS ---
 with tab2:
@@ -257,25 +208,22 @@ with tab2:
     if df_deployments.empty:
         st.info("No deployments registered in the sheet.")
     else:
-        latest_deployments = df_deployments.sort_values(by="outreach_date", ascending=False).head(5)
+        latest_deployments = df_deployments.sort_values(by="Date", ascending=False).head(5)
         for idx, row in latest_deployments.iterrows():
             with st.container(border=True):
                 c1, c2 = st.columns([3, 1])
                 with c1:
-                    date_str = row['outreach_date'].strftime('%b %d, %Y') if pd.notna(row['outreach_date']) else "Date Pending"
-                    st.markdown(f"### {row['location']} — `{date_str}`")
-                    
-                    risk_pill = get_pill_html(row['risk_type'])
-                    intel_pill = get_pill_html(row['intel_source'])
-                    st.markdown(f"{risk_pill}{intel_pill}", unsafe_allow_html=True)
-                    
-                    st.markdown(f"**Community Concerns & Purpose Summary:**")
-                    st.write(row['community_concerns'])
+                    date_str = row['Date'].strftime('%b %d, %Y') if pd.notna(row['Date']) else "Date Pending"
+                    st.markdown(f"### {row['Location']} ({row['Neighborhood']}) — `{date_str}`")
+                    st.caption(f"Logged by Author: **{row['Author']}**")
+                    st.markdown(f"**Trigger:** {row['Trigger Incident']} | **Source:** {row['Intel / Source']}")
+                    st.markdown(f"**Summary:**")
+                    st.write(row['Community Concerns / Purpose'])
                 with c2:
                     st.markdown("⚡ **Operational Specs**")
-                    st.markdown(f"👥 **Engaged:** {row['members_engaged']} neighbors")
-                    st.markdown(f"👷‍♂️ **Staff Attended:** {row['staff_count']} members")
-                    st.markdown(f"⏳ **Duration:** {row['hours_deployed']} hrs")
+                    st.markdown(f"👥 **Engaged:** {row['Community Member Engaged']} neighbors")
+                    st.markdown(f"👷‍♂️ **Staff:** {row['Staff Count Attended']} members")
+                    st.markdown(f"⏳ **Duration:** {row['Total Hours Deployed']} hrs")
 
 # --- TAB 3: SEARCH & MANAGE HISTORY ---
 with tab3:
@@ -285,61 +233,56 @@ with tab3:
     else:
         f_col1, f_col2, f_col3 = st.columns(3)
         with f_col1:
-            sel_risk = st.selectbox("Filter by Incident Type", ["All"] + RISK_OPTIONS, key="filter_risk")
+            sel_trigger = st.selectbox("Filter by Trigger", ["All"] + TRIGGER_OPTIONS)
         with f_col2:
-            sel_intel = st.selectbox("Filter by Intel Trigger", ["All"] + INTEL_OPTIONS, key="filter_intel")
+            sel_intel = st.selectbox("Filter by Intel Source", ["All"] + INTEL_OPTIONS)
         with f_col3:
-            search_query = st.text_input("Search Location/Keyword", key="filter_search").strip().lower()
+            search_query = st.text_input("Search Neighborhood/Keyword").strip().lower()
 
         filtered_df = df_deployments.copy()
-        if sel_risk != "All":
-            filtered_df = filtered_df[filtered_df["risk_type"] == sel_risk]
+        if sel_trigger != "All":
+            filtered_df = filtered_df[filtered_df["Trigger Incident"] == sel_trigger]
         if sel_intel != "All":
-            filtered_df = filtered_df[filtered_df["intel_source"] == sel_intel]
+            filtered_df = filtered_df[filtered_df["Intel / Source"] == sel_intel]
         if search_query:
             filtered_df = filtered_df[
-                filtered_df["location"].astype(str).str.lower().str.contains(search_query) |
-                filtered_df["community_concerns"].astype(str).str.lower().str.contains(search_query)
+                filtered_df["Neighborhood"].astype(str).str.lower().str.contains(search_query) |
+                filtered_df["Community Concerns / Purpose"].astype(str).str.lower().str.contains(search_query)
             ]
 
         st.markdown("---")
 
         for idx, row in filtered_df.iterrows():
-            formatted_date = row['outreach_date'].strftime('%Y-%m-%d') if pd.notna(row['outreach_date']) else ''
-            with st.expander(f"📍 {row['location']} ({row['risk_type']}) — {formatted_date}"):
-                
-                # Both roles can edit logs based on the authorization rule
-                if st.session_state.user_role in ["Admin", "Supervisor"]:
-                    with st.form(key=f"edit_form_{idx}"):
-                        e_loc = st.text_input("Location / Neighborhood", value=row['location'])
-                        e_risk = st.selectbox("Incident Type (Risk Type)", RISK_OPTIONS, index=RISK_OPTIONS.index(row['risk_type']) if row['risk_type'] in RISK_OPTIONS else 0)
-                        e_intel = st.selectbox("Intel Trigger Source", INTEL_OPTIONS, index=INTEL_OPTIONS.index(row['intel_source']) if row['intel_source'] in INTEL_OPTIONS else 0)
+            formatted_date = row['Date'].strftime('%Y-%m-%d') if pd.notna(row['Date']) else ''
+            with st.expander(f"📍 {row['Location']} ({row['Neighborhood']}) — {formatted_date}"):
+                with st.form(key=f"edit_form_{idx}"):
+                    e_loc = st.selectbox("Location", LOCATION_OPTIONS, index=LOCATION_OPTIONS.index(row['Location']) if row['Location'] in LOCATION_OPTIONS else 0)
+                    e_neigh = st.text_input("Neighborhood", value=row['Neighborhood'])
+                    e_trigger = st.selectbox("Trigger Incident", TRIGGER_OPTIONS, index=TRIGGER_OPTIONS.index(row['Trigger Incident']) if row['Trigger Incident'] in TRIGGER_OPTIONS else 0)
+                    e_intel = st.selectbox("Intel / Source", INTEL_OPTIONS, index=INTEL_OPTIONS.index(row['Intel / Source']) if row['Intel / Source'] in INTEL_OPTIONS else 0)
+                    
+                    ec1, ec2, ec3 = st.columns(3)
+                    with ec1:
+                        e_engaged = st.number_input("Community Member Engaged", min_value=0, value=int(row['Community Member Engaged']) if pd.notna(row['Community Member Engaged']) else 0)
+                    with ec2:
+                        e_staff = st.number_input("Staff Count Attended", min_value=0, value=int(row['Staff Count Attended']) if pd.notna(row['Staff Count Attended']) else 0)
+                    with ec3:
+                        e_hours = st.number_input("Total Hours Deployed", min_value=0.0, step=0.5, value=float(row['Total Hours Deployed']) if pd.notna(row['Total Hours Deployed']) else 0.0)
+                    
+                    e_concerns = st.text_area("Community Concerns / Purpose", value=row['Community Concerns / Purpose'])
+                    
+                    save_btn = st.form_submit_button("Update Data Row")
+                    if save_btn:
+                        df_deployments.at[idx, 'Location'] = e_loc
+                        df_deployments.at[idx, 'Neighborhood'] = e_neigh
+                        df_deployments.at[idx, 'Trigger Incident'] = e_trigger
+                        df_deployments.at[idx, 'Intel / Source'] = e_intel
+                        df_deployments.at[idx, 'Community Member Engaged'] = e_engaged
+                        df_deployments.at[idx, 'Staff Count Attended'] = e_staff
+                        df_deployments.at[idx, 'Total Hours Deployed'] = e_hours
+                        df_deployments.at[idx, 'Community Concerns / Purpose'] = e_concerns
                         
-                        ec1, ec2, ec3 = st.columns(3)
-                        with ec1:
-                            e_engaged = st.number_input("Community Members Engaged", min_value=0, value=int(row['members_engaged']) if pd.notna(row['members_engaged']) else 0)
-                        with ec2:
-                            e_staff = st.number_input("Staff Count Attended", min_value=0, value=int(row['staff_count']) if pd.notna(row['staff_count']) else 0)
-                        with ec3:
-                            e_hours = st.number_input("Total Hours Deployed", min_value=0.0, step=0.5, value=float(row['hours_deployed']) if pd.notna(row['hours_deployed']) else 0.0)
-                        
-                        e_concerns = st.text_area("Community Concerns & Field Notes", value=row['community_concerns'])
-                        
-                        save_btn = st.form_submit_button("Update Data Row")
-                        if save_btn:
-                            df_deployments.at[idx, 'location'] = e_loc
-                            df_deployments.at[idx, 'risk_type'] = e_risk
-                            df_deployments.at[idx, 'intel_source'] = e_intel
-                            df_deployments.at[idx, 'members_engaged'] = e_engaged
-                            df_deployments.at[idx, 'staff_count'] = e_staff
-                            df_deployments.at[idx, 'hours_deployed'] = e_hours
-                            df_deployments.at[idx, 'community_concerns'] = e_concerns
-                            
-                            if save_dataframe_to_gsheet(df_deployments):
-                                st.cache_data.clear()
-                                st.success("Google Sheets entries synchronized!")
-                                st.rerun()
-                else:
-                    st.markdown(f"**Intel Trigger:** {row['intel_source']}")
-                    st.markdown(f"👥 **Engaged:** {row['members_engaged']} residents | 👷‍♂️ **Staff:** {row['staff_count']} members | ⏳ **Time:** {row['hours_deployed']} hrs")
-                    st.info(f"**Field Log:** {row['community_concerns']}")
+                        if save_dataframe_to_gsheet(df_deployments):
+                            st.cache_data.clear()
+                            st.success("Google Sheets row synchronized successfully!")
+                            st.rerun()
