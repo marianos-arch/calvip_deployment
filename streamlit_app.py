@@ -13,6 +13,22 @@ if "logged_in" not in st.session_state:
 if "user_role" not in st.session_state:
     st.session_state.user_role = None  # Tracks "Admin" or "Supervisor"
 
+def safe_int(val, default=0):
+    try:
+        if pd.isna(val) or str(val).strip() == '':
+            return default
+        return int(float(val))
+    except (ValueError, TypeError):
+        return default
+
+def safe_float(val, default=0.0):
+    try:
+        if pd.isna(val) or str(val).strip() == '':
+            return default
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
 # --- DATABASE CONNECTION (Google Sheets via Dynamic Secrets & gspread) ---
 @st.cache_data(ttl=0)  
 def load_data():
@@ -262,14 +278,27 @@ with tab3:
                     e_intel = st.selectbox("Intel / Source", INTEL_OPTIONS, index=INTEL_OPTIONS.index(row['Intel / Source']) if row['Intel / Source'] in INTEL_OPTIONS else 0)
                     
                     ec1, ec2, ec3 = st.columns(3)
+                    ec1, ec2, ec3 = st.columns(3)
                     with ec1:
-                        e_engaged = st.number_input("Community Member Engaged", min_value=0, value=int(row['Community Member Engaged']) if pd.notna(row['Community Member Engaged']) else 0)
+                        e_engaged = st.number_input(
+                            "Community Member Engaged", 
+                            min_value=0, 
+                            value=safe_int(row.get('Community Member Engaged', 0))
+                        )
                     with ec2:
-                        e_staff = st.number_input("Staff Count Attended", min_value=0, value=int(row['Staff Count Attended']) if pd.notna(row['Staff Count Attended']) else 0)
+                        e_staff = st.number_input(
+                            "Staff Count Attended", 
+                            min_value=0, 
+                            value=safe_int(row.get('Staff Count Attended', 0))
+                        )
                     with ec3:
-                        e_hours = st.number_input("Total Hours Deployed", min_value=0.0, step=0.5, value=float(row['Total Hours Deployed']) if pd.notna(row['Total Hours Deployed']) else 0.0)
+                        e_hours = st.number_input(
+                            "Total Hours Deployed", 
+                            min_value=0.0, 
+                            step=0.5, 
+                            value=safe_float(row.get('Total Hours Deployed', 0.0))
+                        )
                     
-                    e_concerns = st.text_area("Community Concerns / Purpose", value=row['Community Concerns / Purpose'])
                     
                     save_btn = st.form_submit_button("Update Data Row")
                     if save_btn:
