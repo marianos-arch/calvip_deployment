@@ -60,8 +60,7 @@ def save_dataframe_to_gsheet(df_to_save):
             last_numeric_row = 1  # Defaults to row 1 (the header row)
             
             for idx, val in enumerate(raw_ids):
-                # Strip potential hidden quotes or spaces when reading to evaluate numbers correctly
-                cleaned = str(val).strip().replace("'", "")
+                cleaned = str(val).strip()
                 if cleaned.isdigit():
                     last_numeric_row = idx + 1  # Sheets are 1-indexed
 
@@ -71,27 +70,28 @@ def save_dataframe_to_gsheet(df_to_save):
             # 3. Grab the fresh data entry from memory
             fresh_entry = df_to_save.iloc[-1]
             
-            # 4. Format the date cleanly
+            # 4. Explicitly map fields to match your exact headers order
             formatted_date = ""
             if 'Date' in fresh_entry and pd.notna(fresh_entry['Date']):
-                formatted_date = pd.to_datetime(fresh_entry['Date']).strftime('%Y-%m-%d')
+                # 🌟 ADDED: Prepends a single quote to force text formatting in Google Sheets
+                formatted_date = f"'{pd.to_datetime(fresh_entry['Date']).strftime('%Y-%m-%d')}"
 
-            # 5. Build payload adding a single quote (') in front of the data cells
+            # Build the clean payload row array explicitly
             new_row_payload = [
-                f"'{int(fresh_entry.get('Id', 1))}",
-                f"'{str(fresh_entry.get('Location', ''))}",
-                f"'{str(fresh_entry.get('Neighborhood', ''))}",
-                f"'{formatted_date}" if formatted_date else "",
-                f"'{str(fresh_entry.get('Trigger Incident', ''))}",
-                f"'{str(fresh_entry.get('Intel / Source', ''))}",
-                f"'{int(fresh_entry.get('Community Member Engaged', 0))}",
-                f"'{int(fresh_entry.get('Staff Count Attended', 0))}",
-                f"'{float(fresh_entry.get('Total Hours Deployed', 0.0))}",
-                f"'{str(fresh_entry.get('Author', ''))}",
-                f"'{str(fresh_entry.get('Community Concerns / Purpose', ''))}"
+                int(fresh_entry.get('Id', 1)),
+                str(fresh_entry.get('Location', '')),
+                str(fresh_entry.get('Neighborhood', '')),
+                formatted_date,  # Holds the text-escaped date string
+                str(fresh_entry.get('Trigger Incident', '')),
+                str(fresh_entry.get('Intel / Source', '')),
+                int(fresh_entry.get('Community Member Engaged', 0)),
+                int(fresh_entry.get('Staff Count Attended', 0)),
+                float(fresh_entry.get('Total Hours Deployed', 0.0)),
+                str(fresh_entry.get('Author', '')),
+                str(fresh_entry.get('Community Concerns / Purpose', ''))
             ]
             
-            # 6. Insert the new text-protected row directly after the checked ID position
+            # 5. Insert the new data row directly after the checked ID position
             sheet_api_client.insert_row(
                 new_row_payload, 
                 index=insert_target_row, 
@@ -103,7 +103,8 @@ def save_dataframe_to_gsheet(df_to_save):
             st.error(f"Error updating deployment logs: {e}")
             return False
     return False
-    
+
+
 # --- FETCH DATA ---
 df_deployments, sheet_api_client = load_data()
 
