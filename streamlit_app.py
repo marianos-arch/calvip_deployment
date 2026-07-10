@@ -50,7 +50,6 @@ def load_data():
         st.error(f"Failed to connect to Deployment sheet: {e}")
         return pd.DataFrame(), None
 
-# --- WRITE BACK VIA GSPREAD ---
 def save_dataframe_to_gsheet(df_to_save):
     if sheet_api_client is not None:
         try:
@@ -75,10 +74,9 @@ def save_dataframe_to_gsheet(df_to_save):
             new_entry = new_entry.fillna("")
             new_row_payload = new_entry.values.tolist()
             
-            # 4. Insert directly after the last verified data row
+            # 4. 🌟 INJECT THE ROW RIGHT AFTER THE ID NUMBER CHECK
             if last_entry_row_idx is not None:
                 insert_target_idx = last_entry_row_idx + 1
-                # 🌟 INJECTS DIRECTLY AFTER YOUR LAST NUMBERED ROW
                 sheet_api_client.insert_row(new_row_payload, index=insert_target_idx, value_input_option="USER_ENTERED")
             else:
                 # Fallback safeguard: if no numeric entries exist yet, place right below the header (Row 2)
