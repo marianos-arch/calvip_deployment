@@ -13,22 +13,6 @@ if "logged_in" not in st.session_state:
 if "user_role" not in st.session_state:
     st.session_state.user_role = None  # Tracks "Admin" or "Supervisor"
 
-def safe_int(val, default=0):
-    try:
-        if pd.isna(val) or str(val).strip() == '':
-            return default
-        return int(float(val))
-    except (ValueError, TypeError):
-        return default
-
-def safe_float(val, default=0.0):
-    try:
-        if pd.isna(val) or str(val).strip() == '':
-            return default
-        return float(val)
-    except (ValueError, TypeError):
-        return default
-
 # --- DATABASE CONNECTION (Google Sheets via Dynamic Secrets & gspread) ---
 @st.cache_data(ttl=0)  
 def load_data():
@@ -95,6 +79,23 @@ LOCATION_OPTIONS = ["East Bakersfield", "Southeast Bakersfield", "Central Bakers
 TRIGGER_OPTIONS = ["Gun Shot Wound (GSW)", "Assault", "Stabbing", "Shooting", "Community Tension", "Retaliatory Conflict"]
 INTEL_OPTIONS = ["ShotSpotter", "BPD Intel", "HBVI Intel", "Community Intelligence"]
 
+
+def safe_int(val, default=0):
+    try:
+        if pd.isna(val) or str(val).strip() == '':
+            return default
+        return int(float(val))
+    except (ValueError, TypeError):
+        return default
+
+def safe_float(val, default=0.0):
+    try:
+        if pd.isna(val) or str(val).strip() == '':
+            return default
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+        
 
 # =========================================================================
 # 🔐 GATED INTERFACE CONTROL
