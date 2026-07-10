@@ -54,13 +54,36 @@ def load_data():
 def save_dataframe_to_gsheet(df_to_save):
     if sheet_api_client is not None:
         try:
+            # 1. Get all raw values currently on the Google Sheet
+            raw_rows = sheet_api_client.get_all_values()
+            headers = raw_rows[0]
+            
+            # 2. Find where the "END" marker row lives in the raw sheet
+            end_row_idx = None
+            for idx, r in enumerate(raw_rows):
+                if r and len(r) > 0 and str(r[0]).strip().upper() == "END":
+                    end_row_idx = idx
+                    break
+            
+            # 3. Format our incoming data safely
             df_copy = df_to_save.copy()
             if 'Date' in df_copy.columns:
                 df_copy['Date'] = pd.to_datetime(df_copy['Date']).dt.strftime('%Y-%m-%d')
-            
             df_copy = df_copy.fillna("")
+            new_data_rows = df_copy.values.tolist()
+            
+            # 4. Reconstruct the spreadsheet payload
+            if end_row_idx is not None:
+                # Keep everything that was *below* (and including) the END marker intact
+                meta_and_end_rows = raw_rows[end_row_idx:]
+                final_payload = [headers] + new_data_rows + meta_and_end_rows
+            else:
+                # Fallback if someone accidentally deleted the END marker row completely
+                final_payload = [headers] + new_data_rows + [["END"] + [""] * (len(headers) - 1)]
+                
+            # 5. Overwrite the sheet safely with the complete combined structure
             sheet_api_client.clear()
-            sheet_api_client.update(values=[df_copy.columns.values.tolist()] + df_copy.values.tolist())
+            sheet_api_client.update(values=final_payload)
             return True
         except Exception as e:
             st.error(f"Error updating deployment logs: {e}")
