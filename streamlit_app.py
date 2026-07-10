@@ -54,48 +54,40 @@ def load_data():
 def save_dataframe_to_gsheet(df_to_save):
     if sheet_api_client is not None:
         try:
-            # 1. Fetch all raw content currently on your live Google Sheet
-            raw_rows = sheet_api_client.get_all_values()
+            # 1. Pull the live text array from the sheet to locate the exact row index of "END"
+            raw_ids = sheet_api_client.col_values(1) # Gets all values from the first column (Id)
             
-            # If the sheet is completely empty for some reason, grab headers from the DataFrame
-            if not raw_rows:
-                headers = df_to_save.columns.values.tolist()
-                meta_and_end_rows = [["END"] + [""] * (len(headers) - 1)]
+            end_row_number = None
+            for idx, val in enumerate(raw_ids):
+                if str(val).strip().upper() == "END":
+                    end_row_number = idx + 1 # Google Sheets is 1-indexed
+                    break
+            
+            # 2. Grab only the very last row appended to our Dataframe (the one the user just typed)
+            new_entry = df_to_save.iloc[-1].copy()
+            
+            # Format the date cleanly before pushing
+            if 'Date' in new_entry and pd.notna(new_entry['Date']):
+                new_entry['Date'] = pd.to_datetime(new_entry['Date']).strftime('%Y-%m-%d')
+            
+            new_entry = new_entry.fillna("")
+            new_row_payload = new_entry.values.tolist()
+            
+            if end_row_number is not None:
+                # 🌟 INJECT A NEW ROW DIRECTLY ABOVE THE "END" MARKER ROW
+                # This automatically pushes row 14 to row 15, preserving everything below it!
+                sheet_api_client.insert_row(new_row_payload, index=end_row_number, value_input_option="USER_ENTERED")
             else:
-                headers = raw_rows[0]
-                # 2. Locate where your "END" marker row is positioned
-                end_row_idx = None
-                for idx, r in enumerate(raw_rows):
-                    if r and len(r) > 0 and str(r[0]).strip().upper() == "END":
-                        end_row_idx = idx
-                        break
+                # Fallback safeguard: if "END" went missing, append at the absolute bottom
+                sheet_api_client.append_row(new_row_payload, value_input_option="USER_ENTERED")
                 
-                if end_row_idx is not None:
-                    # Keep your END marker and everything below it perfectly intact
-                    meta_and_end_rows = raw_rows[end_row_idx:]
-                else:
-                    # Fallback protection if the END marker row was deleted
-                    meta_and_end_rows = [["END"] + [""] * (len(headers) - 1)]
-            
-            # 3. Clean and format the new active data rows
-            df_copy = df_to_save.copy()
-            if 'Date' in df_copy.columns:
-                df_copy['Date'] = pd.to_datetime(df_copy['Date']).dt.strftime('%Y-%m-%d')
-            df_copy = df_copy.fillna("")
-            new_data_rows = df_copy.values.tolist()
-            
-            # 4. Construct the complete matrix payload
-            final_payload = [headers] + new_data_rows + meta_and_end_rows
-            
-            # 5. Clear the sheet and write from cell A1 using the updated gspread syntax
-            sheet_api_client.clear()
-            sheet_api_client.update(range_name="A1", values=final_payload)
             return True
             
         except Exception as e:
             st.error(f"Error updating deployment logs: {e}")
             return False
-    return False
+    return False  
+    
 # --- FETCH DATA ---
 df_deployments, sheet_api_client = load_data()
 
