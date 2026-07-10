@@ -49,44 +49,61 @@ def load_data():
     except Exception as e:
         st.error(f"Failed to connect to Deployment sheet: {e}")
         return pd.DataFrame(), None
+
 def save_dataframe_to_gsheet(df_to_save):
     if sheet_api_client is not None:
         try:
-            # 1. Fetch all raw data from the first column (Id) to map active entries
+            # 1. Get all raw values from the first column (Id)
             raw_ids = sheet_api_client.col_values(1)
             
-            # 2. Find the last verifiable numeric entry row index
-            last_entry_row_idx = None
+            # 2. Track the exact row index where the last numeric ID lives
+            last_numeric_row = 1  # Defaults to row 1 (the header row)
+            
             for idx, val in enumerate(raw_ids):
-                cleaned_val = str(val).strip()
-                # Check if the cell contains a digit/number (verifiable entry)
-                if cleaned_val.isdigit():
-                    last_entry_row_idx = idx + 1 # Convert to 1-indexed for Google Sheets
+                # Strip potential hidden quotes or spaces when reading to evaluate numbers correctly
+                cleaned = str(val).strip().replace("'", "")
+                if cleaned.isdigit():
+                    last_numeric_row = idx + 1  # Sheets are 1-indexed
+
+            # Target index is exactly 1 row after the last verified ID row
+            insert_target_row = last_numeric_row + 1
+
+            # 3. Grab the fresh data entry from memory
+            fresh_entry = df_to_save.iloc[-1]
             
-            # 3. Grab only the very last row appended to our memory Dataframe
-            new_entry = df_to_save.iloc[-1].copy()
+            # 4. Format the date cleanly
+            formatted_date = ""
+            if 'Date' in fresh_entry and pd.notna(fresh_entry['Date']):
+                formatted_date = pd.to_datetime(fresh_entry['Date']).strftime('%Y-%m-%d')
+
+            # 5. Build payload adding a single quote (') in front of the data cells
+            new_row_payload = [
+                f"'{int(fresh_entry.get('Id', 1))}",
+                f"'{str(fresh_entry.get('Location', ''))}",
+                f"'{str(fresh_entry.get('Neighborhood', ''))}",
+                f"'{formatted_date}" if formatted_date else "",
+                f"'{str(fresh_entry.get('Trigger Incident', ''))}",
+                f"'{str(fresh_entry.get('Intel / Source', ''))}",
+                f"'{int(fresh_entry.get('Community Member Engaged', 0))}",
+                f"'{int(fresh_entry.get('Staff Count Attended', 0))}",
+                f"'{float(fresh_entry.get('Total Hours Deployed', 0.0))}",
+                f"'{str(fresh_entry.get('Author', ''))}",
+                f"'{str(fresh_entry.get('Community Concerns / Purpose', ''))}"
+            ]
             
-            # Format the date cleanly before pushing
-            if 'Date' in new_entry and pd.notna(new_entry['Date']):
-                new_entry['Date'] = pd.to_datetime(new_entry['Date']).strftime('%Y-%m-%d')
-            
-            new_entry = new_entry.fillna("")
-            new_row_payload = new_entry.values.tolist()
-            
-            # 4. 🌟 INJECT THE ROW RIGHT AFTER THE ID NUMBER CHECK
-            if last_entry_row_idx is not None:
-                insert_target_idx = last_entry_row_idx + 1
-                sheet_api_client.insert_row(new_row_payload, index=insert_target_idx, value_input_option="USER_ENTERED")
-            else:
-                # Fallback safeguard: if no numeric entries exist yet, place right below the header (Row 2)
-                sheet_api_client.insert_row(new_row_payload, index=2, value_input_option="USER_ENTERED")
-                
+            # 6. Insert the new text-protected row directly after the checked ID position
+            sheet_api_client.insert_row(
+                new_row_payload, 
+                index=insert_target_row, 
+                value_input_option="USER_ENTERED"
+            )
             return True
             
         except Exception as e:
             st.error(f"Error updating deployment logs: {e}")
             return False
     return False
+    
 # --- FETCH DATA ---
 df_deployments, sheet_api_client = load_data()
 
