@@ -74,14 +74,24 @@ if not df_deployments.empty:
     # 1. Clean up hidden spaces from headers
     df_deployments.columns = df_deployments.columns.str.strip()
     
-    # This filters out any rows where 'Location' or 'Date' are blank strings or nulls
+    # Convert ID to string to safely look for the word "END"
+    id_series = df_deployments['Id'].astype(str).str.strip().str.upper()
+    
+    if "END" in id_series.values:
+        # Find the first row index where "END" appears
+        end_index = id_series[id_series == "END"].index[0]
+        # Only keep rows *before* this index
+        df_deployments = df_deployments.iloc[:end_index]
+    
+    # 3. Double-check to clean any trailing phantom/blank rows before that marker
     df_deployments = df_deployments[
         (df_deployments['Location'].astype(str).str.strip() != "") & 
         (df_deployments['Location'].notna())
     ]
-
+    
     if 'Date' in df_deployments.columns:
         df_deployments['Date'] = pd.to_datetime(df_deployments['Date'], errors='coerce')
+
 
 # --- DROPDOWN OPTIONS MAPPED TO YOUR NEW CONFIGURATION ---
 LOCATION_OPTIONS = ["East Bakersfield", "Southeast Bakersfield", "Central Bakersfield", "Oildale", "Delano", "Other"]
