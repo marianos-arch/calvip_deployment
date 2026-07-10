@@ -71,6 +71,15 @@ def save_dataframe_to_gsheet(df_to_save):
 df_deployments, sheet_api_client = load_data()
 
 if not df_deployments.empty:
+    # 1. Clean up hidden spaces from headers
+    df_deployments.columns = df_deployments.columns.str.strip()
+    
+    # This filters out any rows where 'Location' or 'Date' are blank strings or nulls
+    df_deployments = df_deployments[
+        (df_deployments['Location'].astype(str).str.strip() != "") & 
+        (df_deployments['Location'].notna())
+    ]
+
     if 'Date' in df_deployments.columns:
         df_deployments['Date'] = pd.to_datetime(df_deployments['Date'], errors='coerce')
 
