@@ -54,42 +54,48 @@ def load_data():
 def save_dataframe_to_gsheet(df_to_save):
     if sheet_api_client is not None:
         try:
-            # 1. Get all raw values currently on the Google Sheet
+            # 1. Fetch all raw content currently on your live Google Sheet
             raw_rows = sheet_api_client.get_all_values()
-            headers = raw_rows[0]
             
-            # 2. Find where the "END" marker row lives in the raw sheet
-            end_row_idx = None
-            for idx, r in enumerate(raw_rows):
-                if r and len(r) > 0 and str(r[0]).strip().upper() == "END":
-                    end_row_idx = idx
-                    break
+            # If the sheet is completely empty for some reason, grab headers from the DataFrame
+            if not raw_rows:
+                headers = df_to_save.columns.values.tolist()
+                meta_and_end_rows = [["END"] + [""] * (len(headers) - 1)]
+            else:
+                headers = raw_rows[0]
+                # 2. Locate where your "END" marker row is positioned
+                end_row_idx = None
+                for idx, r in enumerate(raw_rows):
+                    if r and len(r) > 0 and str(r[0]).strip().upper() == "END":
+                        end_row_idx = idx
+                        break
+                
+                if end_row_idx is not None:
+                    # Keep your END marker and everything below it perfectly intact
+                    meta_and_end_rows = raw_rows[end_row_idx:]
+                else:
+                    # Fallback protection if the END marker row was deleted
+                    meta_and_end_rows = [["END"] + [""] * (len(headers) - 1)]
             
-            # 3. Format our incoming data safely
+            # 3. Clean and format the new active data rows
             df_copy = df_to_save.copy()
             if 'Date' in df_copy.columns:
                 df_copy['Date'] = pd.to_datetime(df_copy['Date']).dt.strftime('%Y-%m-%d')
             df_copy = df_copy.fillna("")
             new_data_rows = df_copy.values.tolist()
             
-            # 4. Reconstruct the spreadsheet payload
-            if end_row_idx is not None:
-                # Keep everything that was *below* (and including) the END marker intact
-                meta_and_end_rows = raw_rows[end_row_idx:]
-                final_payload = [headers] + new_data_rows + meta_and_end_rows
-            else:
-                # Fallback if someone accidentally deleted the END marker row completely
-                final_payload = [headers] + new_data_rows + [["END"] + [""] * (len(headers) - 1)]
-                
-            # 5. Overwrite the sheet safely with the complete combined structure
+            # 4. Construct the complete matrix payload
+            final_payload = [headers] + new_data_rows + meta_and_end_rows
+            
+            # 5. Clear the sheet and write from cell A1 using the updated gspread syntax
             sheet_api_client.clear()
-            sheet_api_client.update(values=final_payload)
+            sheet_api_client.update(range_name="A1", values=final_payload)
             return True
+            
         except Exception as e:
             st.error(f"Error updating deployment logs: {e}")
             return False
     return False
-
 # --- FETCH DATA ---
 df_deployments, sheet_api_client = load_data()
 
