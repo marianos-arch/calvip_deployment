@@ -233,8 +233,9 @@ with tab1:
         n_concerns = st.text_area("Community Concerns / Purpose")
         
         submit_new = st.form_submit_button("Submit Deployment to Tracker", use_container_width=True)
-        
+
         if submit_new:
+            # Calculate next numeric ID based on active deployments
             next_id = int(df_deployments['Id'].max() + 1) if not df_deployments.empty and 'Id' in df_deployments.columns else 1
             
             new_row = {
@@ -247,7 +248,7 @@ with tab1:
                 "Community Member Engaged": n_engaged,
                 "Staff Count Attended": n_staff,
                 "Total Hours Deployed": n_hours,
-                "Author": st.session_state.user_role, # Captures "Admin" or "Supervisor" directly from login
+                "Author": st.session_state.user_role, 
                 "Community Concerns / Purpose": n_concerns
             }
             
@@ -256,11 +257,12 @@ with tab1:
             else:
                 updated_df = pd.concat([df_deployments, pd.DataFrame([new_row])], ignore_index=True)
             
+            # This safely injects the data right above your END row layout
             if save_dataframe_to_gsheet(updated_df):
                 st.cache_data.clear()
-                st.success("New deployment data successfully pushed into Row 2 of your format sheet!")
+                st.success("New deployment entry recorded safely right above your template boundary!")
                 st.rerun()
-
+        
 # --- TAB 2: RECENT INTEL DEPLOYMENTS ---
 with tab2:
     st.header("Recent Intel Deployments")
