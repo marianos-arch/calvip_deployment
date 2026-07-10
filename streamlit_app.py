@@ -49,7 +49,6 @@ def load_data():
     except Exception as e:
         st.error(f"Failed to connect to Deployment sheet: {e}")
         return pd.DataFrame(), None
-
 def save_dataframe_to_gsheet(df_to_save):
     if sheet_api_client is not None:
         try:
@@ -88,7 +87,6 @@ def save_dataframe_to_gsheet(df_to_save):
             st.error(f"Error updating deployment logs: {e}")
             return False
     return False
-    
 # --- FETCH DATA ---
 df_deployments, sheet_api_client = load_data()
 
