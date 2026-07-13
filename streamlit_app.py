@@ -73,15 +73,16 @@ def save_dataframe_to_gsheet(df_to_save):
             # 4. Explicitly map fields to match your exact headers order
             formatted_date = ""
             if 'Date' in fresh_entry and pd.notna(fresh_entry['Date']):
-                # 🌟 ADDED: Prepends a single quote to force text formatting in Google Sheets
                 formatted_date = f"'{pd.to_datetime(fresh_entry['Date']).strftime('%Y-%m-%d')}"
 
             # Build the clean payload row array explicitly
+            # 🌟 INTEGRATED: Gang Affiliation placed at position 5 (Column E)
             new_row_payload = [
                 int(fresh_entry.get('Id', 1)),
                 str(fresh_entry.get('Location', '')),
                 str(fresh_entry.get('Neighborhood', '')),
                 formatted_date,  # Holds the text-escaped date string
+                str(fresh_entry.get('Gang Affiliation', 'N/A')), # Column E (Position 5)
                 str(fresh_entry.get('Trigger Incident', '')),
                 str(fresh_entry.get('Intel / Source', '')),
                 int(fresh_entry.get('Community Member Engaged', 0)),
@@ -134,7 +135,7 @@ if not df_deployments.empty:
 # --- DROPDOWN OPTIONS MAPPED TO YOUR NEW CONFIGURATION ---
 LOCATION_OPTIONS = ["East Bakersfield", "Southeast Bakersfield", "Central Bakersfield", "West Bakersfield", "Oildale", "Delano", "Wasco", "Arvin", "Lamont", "Other (Specify in Neighborhood)"]
 TRIGGER_OPTIONS = ["Gun Shot Wound (GSW)", "Assault", "Stabbing", "Shooting", "Community Tension", "Retaliatory Conflict"]
-GANG_OPTIONS = ["N/A", "Disputeed Territory", "Colonia", "Eastside Bakers", "Loma Bakers", "Lomita Bakers", "Los Primos", "Okie Bakers", "Rexland Parque", "Southside Bakers", "Uptown Bakers", "Varrio Bakers", "Westside Bakers", "Westside Norte", "Country Boy Crip", "Eastside Crip", "Westside Crip"]
+GANG_OPTIONS = ["N/A", "Disputed Territory", "Colonia", "Eastside Bakers", "Loma Bakers", "Lomita Bakers", "Los Primos", "Okie Bakers", "Rexland Parque", "Southside Bakers", "Uptown Bakers", "Varrio Bakers", "Westside Bakers", "Westside Norte", "Country Boy Crip", "Eastside Crip", "Westside Crip"]
 INTEL_OPTIONS = ["ShotSpotter", "BPD Intel", "HBVI Intel", "Community Intelligence", "Social Media"]
 
 
@@ -231,12 +232,15 @@ with tab1:
     st.header("➕ Record New Deployment Entry")
     
     with st.form("new_deployment_form", clear_on_submit=True):
-        n_loc = st.selectbox("Location", LOCATION_OPTIONS)
-        n_neigh = st.text_input("Neighborhood")
-        n_date = st.date_input("Date of Incident", datetime.date.today())
-        
-        n_trigger = st.selectbox("Trigger Incident", TRIGGER_OPTIONS)
-        n_intel = st.selectbox("Intel / Source", INTEL_OPTIONS)
+        fl_col1, fl_col2 = st.columns(2)
+        with fl_col1:
+            n_loc = st.selectbox("Location", LOCATION_OPTIONS)
+            n_neigh = st.text_input("Neighborhood")
+            n_date = st.date_input("Date of Incident", datetime.date.today())
+        with fl_col2:
+            n_trigger = st.selectbox("Trigger Incident", TRIGGER_OPTIONS)
+            n_intel = st.selectbox("Intel / Source", INTEL_OPTIONS)
+            n_gang = st.selectbox("Gang Affiliation", GANG_OPTIONS) # 🌟 ADDED: Gang Affiliation selector
         
         nc1, nc2, nc3 = st.columns(3)
         with nc1:
@@ -259,6 +263,7 @@ with tab1:
                 "Location": n_loc,
                 "Neighborhood": n_neigh,
                 "Date": pd.to_datetime(n_date), 
+                "Gang Affiliation": n_gang, # 🌟 ADDED: Gang Affiliation data field
                 "Trigger Incident": n_trigger,
                 "Intel / Source": n_intel,
                 "Community Member Engaged": n_engaged,
@@ -293,7 +298,8 @@ with tab2:
                     date_str = row['Date'].strftime('%b %d, %Y') if pd.notna(row['Date']) else "Date Pending"
                     st.markdown(f"### {row['Location']} ({row['Neighborhood']}) — `{date_str}`")
                     st.caption(f"Logged by Author: **{row['Author']}**")
-                    st.markdown(f"**Trigger:** {row['Trigger Incident']} | **Source:** {row['Intel / Source']}")
+                    # 🌟 UPDATED: Displaying Gang Affiliation on the operational layout card
+                    st.markdown(f"**Trigger:** {row['Trigger Incident']} | **Source:** {row['Intel / Source']} | **Gang Affiliation:** {row.get('Gang Affiliation', 'N/A')}")
                     st.markdown(f"**Summary:**")
                     st.write(row['Community Concerns / Purpose'])
                 with c2:
@@ -308,12 +314,14 @@ with tab3:
     if df_deployments.empty:
         st.info("No deployment history to manage.")
     else:
-        f_col1, f_col2, f_col3 = st.columns(3)
+        f_col1, f_col2, f_col3, f_col4 = st.columns(4)
         with f_col1:
             sel_trigger = st.selectbox("Filter by Trigger", ["All"] + TRIGGER_OPTIONS)
         with f_col2:
             sel_intel = st.selectbox("Filter by Intel Source", ["All"] + INTEL_OPTIONS)
         with f_col3:
+            sel_gang = st.selectbox("Filter by Gang Affiliation", ["All"] + GANG_OPTIONS) # 🌟 ADDED: Gang Filter Dropdown
+        with f_col4:
             search_query = st.text_input("Search Neighborhood/Keyword").strip().lower()
 
         filtered_df = df_deployments.copy()
@@ -321,6 +329,8 @@ with tab3:
             filtered_df = filtered_df[filtered_df["Trigger Incident"] == sel_trigger]
         if sel_intel != "All":
             filtered_df = filtered_df[filtered_df["Intel / Source"] == sel_intel]
+        if sel_gang != "All":
+            filtered_df = filtered_df[filtered_df["Gang Affiliation"] == sel_gang] # 🌟 ADDED: Filtering Logic applied
         if search_query:
             filtered_df = filtered_df[
                 filtered_df["Neighborhood"].astype(str).str.lower().str.contains(search_query) |
@@ -335,36 +345,50 @@ with tab3:
                 with st.form(key=f"edit_form_{idx}"):
                     e_loc = st.selectbox("Location", LOCATION_OPTIONS, index=LOCATION_OPTIONS.index(row['Location']) if row['Location'] in LOCATION_OPTIONS else 0)
                     e_neigh = st.text_input("Neighborhood", value=row['Neighborhood'])
+                    
+                    # 🌟 ADDED: Date picker configuration inside management form
+                    current_date_val = row['Date'].date() if pd.notna(row['Date']) else datetime.date.today()
+                    e_date = st.date_input("Date of Incident", value=current_date_val, key=f"date_edit_{idx}")
+                    
                     e_trigger = st.selectbox("Trigger Incident", TRIGGER_OPTIONS, index=TRIGGER_OPTIONS.index(row['Trigger Incident']) if row['Trigger Incident'] in TRIGGER_OPTIONS else 0)
                     e_intel = st.selectbox("Intel / Source", INTEL_OPTIONS, index=INTEL_OPTIONS.index(row['Intel / Source']) if row['Intel / Source'] in INTEL_OPTIONS else 0)
                     
-                    ec1, ec2, ec3 = st.columns(3)
+                    # 🌟 ADDED: Gang selector element inside management form
+                    current_gang_val = row.get('Gang Affiliation', 'N/A')
+                    e_gang = st.selectbox("Gang Affiliation", GANG_OPTIONS, index=GANG_OPTIONS.index(current_gang_val) if current_gang_val in GANG_OPTIONS else 0, key=f"gang_edit_{idx}")
+                    
                     ec1, ec2, ec3 = st.columns(3)
                     with ec1:
                         e_engaged = st.number_input(
                             "Community Member Engaged", 
                             min_value=0, 
-                            value=safe_int(row.get('Community Member Engaged', 0))
+                            value=safe_int(row.get('Community Member Engaged', 0)),
+                            key=f"engaged_edit_{idx}"
                         )
                     with ec2:
                         e_staff = st.number_input(
                             "Staff Count Attended", 
                             min_value=0, 
-                            value=safe_int(row.get('Staff Count Attended', 0))
+                            value=safe_int(row.get('Staff Count Attended', 0)),
+                            key=f"staff_edit_{idx}"
                         )
                     with ec3:
                         e_hours = st.number_input(
                             "Total Hours Deployed", 
                             min_value=0.0, 
                             step=0.5, 
-                            value=safe_float(row.get('Total Hours Deployed', 0.0))
+                            value=safe_float(row.get('Total Hours Deployed', 0.0)),
+                            key=f"hours_edit_{idx}"
                         )
                     
+                    e_concerns = st.text_area("Community Concerns / Purpose", value=row.get('Community Concerns / Purpose', ''), key=f"concerns_edit_{idx}")
                     
                     save_btn = st.form_submit_button("Update Data Row")
                     if save_btn:
                         df_deployments.at[idx, 'Location'] = e_loc
                         df_deployments.at[idx, 'Neighborhood'] = e_neigh
+                        df_deployments.at[idx, 'Date'] = pd.to_datetime(e_date) # 🌟 Save updated date picker choice
+                        df_deployments.at[idx, 'Gang Affiliation'] = e_gang # 🌟 Save updated gang choice
                         df_deployments.at[idx, 'Trigger Incident'] = e_trigger
                         df_deployments.at[idx, 'Intel / Source'] = e_intel
                         df_deployments.at[idx, 'Community Member Engaged'] = e_engaged
