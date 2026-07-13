@@ -132,9 +132,10 @@ if not df_deployments.empty:
 
 
 # --- DROPDOWN OPTIONS MAPPED TO YOUR NEW CONFIGURATION ---
-LOCATION_OPTIONS = ["East Bakersfield", "Southeast Bakersfield", "Central Bakersfield", "Oildale", "Delano", "Other"]
+LOCATION_OPTIONS = ["East Bakersfield", "Southeast Bakersfield", "Central Bakersfield", "West Bakersfield, "Oildale", "Delano", "Wasco", "Arvin", "Lamont", "Other (Specify in Neighborhood)"]
 TRIGGER_OPTIONS = ["Gun Shot Wound (GSW)", "Assault", "Stabbing", "Shooting", "Community Tension", "Retaliatory Conflict"]
-INTEL_OPTIONS = ["ShotSpotter", "BPD Intel", "HBVI Intel", "Community Intelligence"]
+GANG_OPTIONS = ["N/A", "Disputeed Territory", "Colonia", "Eastside Bakers", "Loma Bakers", "Lomita Bakers", "Los Primos", "Okie Bakers", "Rexland Parque", "Southside Bakers", "Uptown Bakers", "Varrio Bakers", "Westside Bakers", "Westside Norte", "Country Boy Crip", "Eastside Crip", "Westside Crip"]
+INTEL_OPTIONS = ["ShotSpotter", "BPD Intel", "HBVI Intel", "Community Intelligence", "Social Media"]
 
 
 def safe_int(val, default=0):
