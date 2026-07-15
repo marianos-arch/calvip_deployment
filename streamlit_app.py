@@ -299,7 +299,7 @@ with tab2:
                     st.markdown(f"### {row['Location']} ({row['Neighborhood']}) — `{date_str}`")
                     st.caption(f"Logged by Author: **{row['Author']}**")
                     
-                    st.markdown(f"**Trigger:** {row['Trigger Incident']} | **Source:** {row['Intel / Source']} | **Gang Affiliation:** {row['Gang Affiliation']")
+                    st.markdown(f"**Trigger:** {row['Trigger Incident']} | **Source:** {row['Intel / Source']} | **Gang Affiliation:** {row['Gang Affiliation']}")
                     st.markdown(f"**Summary:**")
                     st.write(row['Community Concerns / Purpose'])
                 with c2:
