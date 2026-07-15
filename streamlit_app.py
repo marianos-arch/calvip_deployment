@@ -292,7 +292,7 @@ with tab1:
         """
         ### Welcome! 
         Please fill out the fields below to log a new deployment. 
-        All sections are laid out step-by-step. When you are done, click the large green **'Save'** button at the bottom.
+        When you are done, click the large green **'Save'** button at the bottom.
         """
     )
     
@@ -315,7 +315,7 @@ with tab1:
                 placeholder="e.g., Cottonwood Road, MLK Blvd, etc.",
                 help="Type the exact street name, block number, or neighborhood name here."
             )
-            st.caption("ℹ️ *This helps us pin down the exact block.*")
+            st.caption("ℹ️ *This helps us pin down the exact location.*")
             
         with col_where2:
             n_date = st.date_input(
@@ -357,7 +357,7 @@ with tab1:
         st.markdown("---")
 
         # --- SECTION 3: NUMBERS & STAFFING ---
-        st.markdown("### 👥 Step 3: Who was involved?")
+        st.markdown("### 👥 **Step 3**: Who was involved?")
         col_num1, col_num2, col_num3 = st.columns(3)
         
         with col_num1:
