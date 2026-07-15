@@ -368,10 +368,13 @@ with tab3:
                     
                     e_trigger = st.selectbox("Trigger Incident", TRIGGER_OPTIONS, index=TRIGGER_OPTIONS.index(row['Trigger Incident']) if row['Trigger Incident'] in TRIGGER_OPTIONS else 0)
                     e_intel = st.selectbox("Intel / Source", INTEL_OPTIONS, index=INTEL_OPTIONS.index(row['Intel / Source']) if row['Intel / Source'] in INTEL_OPTIONS else 0)
-                    
-                    # Gang selector element inside management form
-                    e_gang = st.selectbox("Gang Affiliation", GANG_OPTIONS, index=GANG_OPTIONS.index(row['Gang Affiliation']) if row['Gang Affiliation'] in GANG_OPTIONS else 0)
-                    
+                   
+                    curr_gang = str(row.get('Gang Affiliation', 'N/A')).strip()
+                    if pd.isna(row.get('Gang Affiliation')) or curr_gang == "":
+                        curr_gang = "N/A"
+                    gang_idx = GANG_OPTIONS.index(curr_gang) if curr_gang in GANG_OPTIONS else 0
+                    e_gang = st.selectbox("Gang Affiliation", GANG_OPTIONS, index=gang_idx, key=f"gang_edit_{idx}")
+                                    
                     ec1, ec2, ec3 = st.columns(3)
                     with ec1:
                         e_engaged = st.number_input(
