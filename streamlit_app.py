@@ -284,32 +284,134 @@ tab1, tab2, tab3 = st.tabs([
 
 # --- TAB 1: NEW ENTRY FORM ---
 with tab1:
-    st.header("➕ Record New Deployment Entry")
+    st.markdown("## 📝 Record a New Deployment Entry")
+    st.markdown("---")
+    
+    # Large, friendly instructions at the top
+    st.markdown(
+        """
+        ### Welcome! 
+        Please fill out the fields below to log a new deployment. 
+        All sections are laid out step-by-step. When you are done, click the large green **'Save'** button at the bottom.
+        """
+    )
     
     with st.form("new_deployment_form", clear_on_submit=True):
-        fl_col1, fl_col2 = st.columns(2)
-        with fl_col1:
-            n_loc = st.selectbox("Location", LOCATION_OPTIONS)
-            n_neigh = st.text_input("Neighborhood")
-            n_date = st.date_input("Date of Incident", datetime.date.today())
-        with fl_col2:
-            n_trigger = st.selectbox("Trigger Incident", TRIGGER_OPTIONS)
-            n_intel = st.selectbox("Intel / Source", INTEL_OPTIONS)
-            n_gang = st.selectbox("Gang Affiliation", GANG_OPTIONS)
-    
-        nc1, nc2, nc3 = st.columns(3)
-        with nc1:
-            n_engaged = st.number_input("Community Member Engaged", min_value=0, value=0)
-        with nc2:
-            n_staff = st.number_input("Staff Count Attended", min_value=1, value=1)
-        with nc3:
-            n_hours = st.number_input("Total Hours Deployed", min_value=0.0, step=0.5, value=1.0)
-            
-        n_concerns = st.text_area("Community Concerns / Purpose")
         
-        submit_new = st.form_submit_button("Submit Deployment to Tracker", use_container_width=True)
+        # --- SECTION 1: WHERE & WHEN ---
+        st.markdown("### 📍 Step 1: Where and when did this happen?")
+        col_where1, col_where2 = st.columns(2)
+        
+        with col_where1:
+            n_loc = st.selectbox(
+                "Select the General Location:", 
+                LOCATION_OPTIONS,
+                help="Click to open the list and select the city or region where the deployment occurred."
+            )
+            st.caption("ℹ️ *Choose the closest region from the dropdown menu above.*")
+            
+            n_neigh = st.text_input(
+                "Type the Specific Neighborhood or Street:",
+                placeholder="e.g., Cottonwood Road, MLK Blvd, etc.",
+                help="Type the exact street name, block number, or neighborhood name here."
+            )
+            st.caption("ℹ️ *This helps us pin down the exact block.*")
+            
+        with col_where2:
+            n_date = st.date_input(
+                "Select the Date of the Incident:", 
+                datetime.date.today(),
+                help="Click the calendar to choose the date this took place. It defaults to today."
+            )
+            st.caption("ℹ️ *If this happened on a previous day, click above to change it.*")
+
+        st.markdown("---")
+
+        # --- SECTION 2: INTEL & BACKGROUND ---
+        st.markdown("### 🔍 Step 2: What triggered the deployment?")
+        col_intel1, col_intel2 = st.columns(2)
+        
+        with col_intel1:
+            n_trigger = st.selectbox(
+                "Select the Trigger Incident:", 
+                TRIGGER_OPTIONS,
+                help="What specific event or incident caused us to deploy to this area?"
+            )
+            st.caption("ℹ️ *Choose the primary reason for this deployment.*")
+            
+            n_intel = st.selectbox(
+                "Select the Information Source:", 
+                INTEL_OPTIONS,
+                help="Where did we get the information about this incident?"
+            )
+            st.caption("ℹ️ *Identify how our team was alerted.*")
+            
+        with col_intel2:
+            n_gang = st.selectbox(
+                "Is there a Gang Affiliation involved?", 
+                GANG_OPTIONS,
+                help="If this incident is tied to a specific gang territory or group, select it here. If not, choose N/A."
+            )
+            st.caption("ℹ️ *Select 'N/A' if gang affiliation is unknown or not applicable.*")
+
+        st.markdown("---")
+
+        # --- SECTION 3: NUMBERS & STAFFING ---
+        st.markdown("### 👥 Step 3: Who was involved?")
+        col_num1, col_num2, col_num3 = st.columns(3)
+        
+        with col_num1:
+            n_engaged = st.number_input(
+                "Number of Community Members Engaged:", 
+                min_value=0, 
+                value=0, 
+                step=1,
+                help="How many local residents or neighbors did our staff talk to or connect with during this shift?"
+            )
+            st.caption("ℹ️ *Type in a number or use the + and - buttons.*")
+            
+        with col_num2:
+            n_staff = st.number_input(
+                "Number of Staff Members Present:", 
+                min_value=1, 
+                value=1, 
+                step=1,
+                help="How many of our team members deployed to this location?"
+            )
+            st.caption("ℹ️ *At least 1 staff member must be logged.*")
+            
+        with col_num3:
+            n_hours = st.number_input(
+                "Total Hours Spent on the Block:", 
+                min_value=0.0, 
+                step=0.5, 
+                value=1.0,
+                help="How long was our team deployed in this specific zone? (You can use decimals, e.g., 1.5 for an hour and a half)"
+            )
+            st.caption("ℹ️ *Use 0.5 for half an hour increments.*")
+
+        st.markdown("---")
+
+        # --- SECTION 4: NOTES ---
+        st.markdown("### 📝 Step 4: Summary & Community Concerns")
+        n_concerns = st.text_area(
+            "Write a brief summary of community concerns or the purpose of deployment:",
+            placeholder="Type your field notes here. Explain what the neighbors are saying, what tensions exist, and what our team did on the ground.",
+            help="Provide a clear, detailed summary of your shift here so other team members can easily understand what happened."
+        )
+        st.caption("ℹ️ *Take your time writing this out. Be as detailed as needed.*")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # --- SUBMIT BUTTON ---
+        # Styled to be big, bold, green, and highly visible
+        submit_new = st.form_submit_button(
+            "💾 Click Here to Save This Deployment to the Tracker", 
+            use_container_width=True
+        )
 
         if submit_new:
+            # Calculate next numeric ID based on active deployments
             next_id = int(df_deployments['Id'].max() + 1) if not df_deployments.empty and 'Id' in df_deployments.columns else 1
             
             new_row = {
@@ -332,11 +434,14 @@ with tab1:
             else:
                 updated_df = pd.concat([df_deployments, pd.DataFrame([new_row])], ignore_index=True)
             
-            if save_dataframe_to_gsheet(updated_df):
-                st.cache_data.clear()
-                st.success("New deployment entry recorded safely right above your template boundary!")
-                st.rerun()
-        
+            # Save and refresh
+            with st.spinner("Saving your data securely... please wait a moment."):
+                if save_dataframe_to_gsheet(updated_df):
+                    st.cache_data.clear()
+                    st.balloons()  # Fun, visual celebration to let them know it worked!
+                    st.success("✅ Success! Your new deployment entry has been safely saved to the system.")
+                    st.rerun()
+                    
 # --- TAB 2: RECENT INTEL DEPLOYMENTS ---
 with tab2:
     st.header("Recent Intel Deployments")
