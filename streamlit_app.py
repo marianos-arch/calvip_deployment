@@ -50,7 +50,11 @@ def load_data():
         st.error(f"Failed to connect to Deployment sheet: {e}")
         return pd.DataFrame(), None
 
+
 def save_dataframe_to_gsheet(df_to_save):
+    """
+    Handles appending brand new records to the Google Sheet (Tab 1).
+    """
     if sheet_api_client is not None:
         try:
             # 1. Get all raw values from the first column (Id)
@@ -70,13 +74,12 @@ def save_dataframe_to_gsheet(df_to_save):
             # 3. Grab the fresh data entry from memory
             fresh_entry = df_to_save.iloc[-1]
             
-            # 4. Explicitly map fields to match your exact headers order
+            # 4. Explicitly map fields to match exact headers order
             formatted_date = ""
             if 'Date' in fresh_entry and pd.notna(fresh_entry['Date']):
                 formatted_date = f"'{pd.to_datetime(fresh_entry['Date']).strftime('%Y-%m-%d')}"
 
             # Build the clean payload row array explicitly
-
             new_row_payload = [
                 int(fresh_entry.get('Id', 1)),
                 str(fresh_entry.get('Location', '')),
@@ -105,8 +108,47 @@ def save_dataframe_to_gsheet(df_to_save):
             return False
     return False
 
+
+def update_gsheet_row(row_idx, updated_row_series):
+    """
+    Handles row-specific edits in place (Tab 3).
+    Maps Pandas index to the corresponding Google Sheets row and updates it.
+    """
+    if sheet_api_client is not None:
+        try:
+            # Sheets are 1-indexed and have a header row. Pandas index 0 is Row 2 in Sheets.
+            sheet_row_number = int(row_idx) + 2 
+            
+            formatted_date = ""
+            if 'Date' in updated_row_series and pd.notna(updated_row_series['Date']):
+                formatted_date = f"'{pd.to_datetime(updated_row_series['Date']).strftime('%Y-%m-%d')}"
+
+            update_payload = [
+                int(updated_row_series.get('Id', 1)),
+                str(updated_row_series.get('Location', '')),
+                str(updated_row_series.get('Neighborhood', '')),
+                formatted_date,
+                str(updated_row_series.get('Gang Affiliation', 'N/A')), 
+                str(updated_row_series.get('Trigger Incident', '')),
+                str(updated_row_series.get('Intel / Source', '')),
+                int(updated_row_series.get('Community Member Engaged', 0)),
+                int(updated_row_series.get('Staff Count Attended', 0)),
+                float(updated_row_series.get('Total Hours Deployed', 0.0)),
+                str(updated_row_series.get('Author', '')),
+                str(updated_row_series.get('Community Concerns / Purpose', ''))
+            ]
+            
+            # Select A through L range for this row
+            range_to_update = f"A{sheet_row_number}:L{sheet_row_number}"
+            sheet_api_client.update(range_to_update, [update_payload], value_input_option="USER_ENTERED")
+            return True
+        except Exception as e:
+            st.error(f"Error updating Google Sheet row {sheet_row_number}: {e}")
+            return False
+    return False
+
+
 def safe_col(row, col, default=""):
-    # row is a pandas Series
     try:
         val = row.get(col, default)
     except Exception:
@@ -114,12 +156,13 @@ def safe_col(row, col, default=""):
     if pd.isna(val):
         return default
     return val
-    
+
+
 # --- FETCH DATA ---
 df_deployments, sheet_api_client = load_data()
 
 if not df_deployments.empty:
-    # 1. Clean up hidden spaces from headers
+    # Clean up hidden spaces from headers
     df_deployments.columns = df_deployments.columns.str.strip()
     
     EXPECTED_COLUMNS = [
@@ -130,16 +173,13 @@ if not df_deployments.empty:
     for col in EXPECTED_COLUMNS:
         if col not in df_deployments.columns:
             df_deployments[col] = pd.NA
-    # Convert ID to string to safely look for the word "END"
+
     id_series = df_deployments['Id'].astype(str).str.strip().str.upper()
     
     if "END" in id_series.values:
-        # Find the first row index where "END" appears
         end_index = id_series[id_series == "END"].index[0]
-        # Only keep rows *before* this index
         df_deployments = df_deployments.iloc[:end_index]
     
-    # 3. Double-check to clean any trailing phantom/blank rows before that marker
     df_deployments = df_deployments[
         (df_deployments['Location'].astype(str).str.strip() != "") & 
         (df_deployments['Location'].notna())
@@ -149,7 +189,7 @@ if not df_deployments.empty:
         df_deployments['Date'] = pd.to_datetime(df_deployments['Date'], errors='coerce')
 
 
-# --- DROPDOWN OPTIONS MAPPED TO YOUR NEW CONFIGURATION ---
+# --- DROPDOWN OPTIONS ---
 LOCATION_OPTIONS = ["East Bakersfield", "Southeast Bakersfield", "Central Bakersfield", "West Bakersfield", "Oildale", "Delano", "Wasco", "Arvin", "Lamont", "Other (Specify in Neighborhood)"]
 TRIGGER_OPTIONS = ["Gun Shot Wound (GSW)", "Assault", "Stabbing", "Shooting", "Community Tension", "Retaliatory Conflict"]
 GANG_OPTIONS = ["N/A", "Disputed Territory", "Colonia", "Eastside Bakers", "Loma Bakers", "Lomita Bakers", "Los Primos", "Okie Bakers", "Rexland Parque", "Southside Bakers", "Uptown Bakers", "Varrio Bakers", "Westside Bakers", "Westside Norte", "Country Boy Crip", "Eastside Crip", "Westside Crip", "Peckerwood"]
@@ -204,7 +244,7 @@ if not st.session_state.logged_in:
                     st.error("Invalid passcode credential. Connection refused.")
     st.stop()
 
-# --- LOGOUT CONTROL IN SIDEBAR ---
+
 st.sidebar.title("🔐 Security Status")
 st.sidebar.info(f"Signed in as: **{st.session_state.user_role}**")
 if st.sidebar.button("Log Out / Lock Console"):
@@ -218,7 +258,6 @@ if st.sidebar.button("Log Out / Lock Console"):
 # =========================================================================
 st.title("𝄃 CVI Strategic Outreach & Deployment Dashboard")
 
-# --- HIGH IMPACT SUMMARY ---
 st.markdown("### 📊 High-Impact Footprint Summary")
 col1, col2, col3, col4 = st.columns(4)
 
@@ -237,14 +276,13 @@ col4.metric(label="Total Hours on the Block", value=f"{total_hours} hrs")
 
 st.markdown("---")
 
-# --- TAB LAYOUT SYSTEM ---
 tab1, tab2, tab3 = st.tabs([
     "➕ Log New Deployment Zone", 
     "🎯 Recent Intel Deployments", 
     "🔍 Search & Manage Field History"
 ])
 
-# --- TAB 1: NEW ENTRY FORM FIRST ---
+# --- TAB 1: NEW ENTRY FORM ---
 with tab1:
     st.header("➕ Record New Deployment Entry")
     
@@ -272,7 +310,6 @@ with tab1:
         submit_new = st.form_submit_button("Submit Deployment to Tracker", use_container_width=True)
 
         if submit_new:
-            # Calculate next numeric ID based on active deployments
             next_id = int(df_deployments['Id'].max() + 1) if not df_deployments.empty and 'Id' in df_deployments.columns else 1
             
             new_row = {
@@ -295,7 +332,6 @@ with tab1:
             else:
                 updated_df = pd.concat([df_deployments, pd.DataFrame([new_row])], ignore_index=True)
             
-            # This safely injects the data right above your END row layout
             if save_dataframe_to_gsheet(updated_df):
                 st.cache_data.clear()
                 st.success("New deployment entry recorded safely right above your template boundary!")
@@ -316,7 +352,12 @@ with tab2:
                     st.markdown(f"### {row['Location']} ({row['Neighborhood']}) — `{date_str}`")
                     st.caption(f"Logged by Author: **{row['Author']}**")
                     
-                    st.markdown(f"**Trigger:** {row['Trigger Incident']} | **Source:** {row['Intel / Source']} | **Gang Affiliation:** {row['Gang Affiliation']}")
+                    # 🎯 FIXED: Direct extraction of gang affiliation with proper visual formatting
+                    gang_val = str(row.get('Gang Affiliation', 'N/A')).strip()
+                    if gang_val == "" or pd.isna(row.get('Gang Affiliation')):
+                        gang_val = "N/A"
+                    
+                    st.markdown(f"**Trigger:** {row['Trigger Incident']} | **Source:** {row['Intel / Source']} | **Gang:** `{gang_val}`")
                     st.markdown(f"**Summary:**")
                     st.write(row['Community Concerns / Purpose'])
                 with c2:
@@ -325,12 +366,14 @@ with tab2:
                     st.markdown(f"👷‍♂️ **Staff:** {row['Staff Count Attended']} members")
                     st.markdown(f"⏳ **Duration:** {row['Total Hours Deployed']} hrs")
 
-# --- TAB 3: SEARCH & MANAGE HISTORY ---
+
+# --- TAB 3: SEARCH & MANAGE HISTORY (REVAMPED & CONDENSED) ---
 with tab3:
     st.header("Search & Manage Field History")
     if df_deployments.empty:
         st.info("No deployment history to manage.")
     else:
+        # Filter Strip
         f_col1, f_col2, f_col3, f_col4 = st.columns(4)
         with f_col1:
             sel_trigger = st.selectbox("Filter by Trigger", ["All"] + TRIGGER_OPTIONS)
@@ -338,70 +381,61 @@ with tab3:
             sel_intel = st.selectbox("Filter by Intel Source", ["All"] + INTEL_OPTIONS)
         with f_col3:
             sel_gang = st.selectbox("Filter by Gang Affiliation", ["All"] + GANG_OPTIONS) 
+        with f_col4:
             search_query = st.text_input("Search Neighborhood/Keyword").strip().lower()
 
         filtered_df = df_deployments.copy()
+        
         if sel_trigger != "All":
             filtered_df = filtered_df[filtered_df["Trigger Incident"] == sel_trigger]
         if sel_intel != "All":
             filtered_df = filtered_df[filtered_df["Intel / Source"] == sel_intel]
         if sel_gang != "All":
-            filtered_df = filtered_df[filtered_df["Gang Affiliation"] == sel_gang] 
+            filtered_df = filtered_df[filtered_df["Gang Affiliation"].astype(str).str.strip() == sel_gang] 
         if search_query:
             filtered_df = filtered_df[
                 filtered_df["Neighborhood"].astype(str).str.lower().str.contains(search_query) |
                 filtered_df["Community Concerns / Purpose"].astype(str).str.lower().str.contains(search_query)
             ]
 
+        st.markdown(f"**Showing {len(filtered_df)} matches**")
         st.markdown("---")
 
         for idx, row in filtered_df.iterrows():
-            formatted_date = row['Date'].strftime('%Y-%m-%d') if pd.notna(row['Date']) else ''
-            with st.expander(f"📍 {row['Location']} ({row['Neighborhood']}) — {formatted_date}"):
+            formatted_date = row['Date'].strftime('%Y-%m-%d') if pd.notna(row['Date']) else 'No Date'
+            gang_tag = str(row.get('Gang Affiliation', 'N/A')).strip()
+            if gang_tag == "" or pd.isna(row.get('Gang Affiliation')):
+                gang_tag = "N/A"
+            
+            # Condensed visual accordion header with immediate status tags
+            header_label = f"📍 {row['Location']} ({row['Neighborhood']}) | Date: {formatted_date} | Gang: {gang_tag}"
+            
+            with st.expander(header_label):
                 with st.form(key=f"edit_form_{idx}"):
-                    e_loc = st.selectbox("Location", LOCATION_OPTIONS, index=LOCATION_OPTIONS.index(row['Location']) if row['Location'] in LOCATION_OPTIONS else 0)
-                    e_neigh = st.text_input("Neighborhood", value=row['Neighborhood'])
-                    
-                    # Date picker configuration inside management form
-                    current_date_val = row['Date'].date() if pd.notna(row['Date']) else datetime.date.today()
-                    e_date = st.date_input("Date of Incident", value=current_date_val, key=f"date_edit_{idx}")
-                    
-                    e_trigger = st.selectbox("Trigger Incident", TRIGGER_OPTIONS, index=TRIGGER_OPTIONS.index(row['Trigger Incident']) if row['Trigger Incident'] in TRIGGER_OPTIONS else 0)
-                    e_intel = st.selectbox("Intel / Source", INTEL_OPTIONS, index=INTEL_OPTIONS.index(row['Intel / Source']) if row['Intel / Source'] in INTEL_OPTIONS else 0)
-                   
-                    curr_gang = str(row.get('Gang Affiliation', 'N/A')).strip()
-                    if pd.isna(row.get('Gang Affiliation')) or curr_gang == "":
-                        curr_gang = "N/A"
-                    gang_idx = GANG_OPTIONS.index(curr_gang) if curr_gang in GANG_OPTIONS else 0
-                    e_gang = st.selectbox("Gang Affiliation", GANG_OPTIONS, index=gang_idx, key=f"gang_edit_{idx}")
-                                    
                     ec1, ec2, ec3 = st.columns(3)
                     with ec1:
-                        e_engaged = st.number_input(
-                            "Community Member Engaged", 
-                            min_value=0, 
-                            value=safe_int(row.get('Community Member Engaged', 0)),
-                            key=f"engaged_edit_{idx}"
-                        )
+                        e_loc = st.selectbox("Location", LOCATION_OPTIONS, index=LOCATION_OPTIONS.index(row['Location']) if row['Location'] in LOCATION_OPTIONS else 0, key=f"loc_edit_{idx}")
+                        e_neigh = st.text_input("Neighborhood", value=row['Neighborhood'], key=f"neigh_edit_{idx}")
+                        current_date_val = row['Date'].date() if pd.notna(row['Date']) else datetime.date.today()
+                        e_date = st.date_input("Date of Incident", value=current_date_val, key=f"date_edit_{idx}")
                     with ec2:
-                        e_staff = st.number_input(
-                            "Staff Count Attended", 
-                            min_value=0, 
-                            value=safe_int(row.get('Staff Count Attended', 0)),
-                            key=f"staff_edit_{idx}"
-                        )
+                        e_trigger = st.selectbox("Trigger Incident", TRIGGER_OPTIONS, index=TRIGGER_OPTIONS.index(row['Trigger Incident']) if row['Trigger Incident'] in TRIGGER_OPTIONS else 0, key=f"trig_edit_{idx}")
+                        e_intel = st.selectbox("Intel / Source", INTEL_OPTIONS, index=INTEL_OPTIONS.index(row['Intel / Source']) if row['Intel / Source'] in INTEL_OPTIONS else 0, key=f"intel_edit_{idx}")
+                        
+                        curr_gang = str(row.get('Gang Affiliation', 'N/A')).strip()
+                        if pd.isna(row.get('Gang Affiliation')) or curr_gang == "":
+                            curr_gang = "N/A"
+                        gang_idx = GANG_OPTIONS.index(curr_gang) if curr_gang in GANG_OPTIONS else 0
+                        e_gang = st.selectbox("Gang Affiliation", GANG_OPTIONS, index=gang_idx, key=f"gang_edit_{idx}")
                     with ec3:
-                        e_hours = st.number_input(
-                            "Total Hours Deployed", 
-                            min_value=0.0, 
-                            step=0.5, 
-                            value=safe_float(row.get('Total Hours Deployed', 0.0)),
-                            key=f"hours_edit_{idx}"
-                        )
+                        e_engaged = st.number_input("Community Engaged", min_value=0, value=safe_int(row.get('Community Member Engaged', 0)), key=f"engaged_edit_{idx}")
+                        e_staff = st.number_input("Staff Attended", min_value=0, value=safe_int(row.get('Staff Count Attended', 0)), key=f"staff_edit_{idx}")
+                        e_hours = st.number_input("Hours Deployed", min_value=0.0, step=0.5, value=safe_float(row.get('Total Hours Deployed', 0.0)), key=f"hours_edit_{idx}")
                     
                     e_concerns = st.text_area("Community Concerns / Purpose", value=row.get('Community Concerns / Purpose', ''), key=f"concerns_edit_{idx}")
                     
-                    save_btn = st.form_submit_button("Update Data Row")
+                    save_btn = st.form_submit_button("💾 Save Updates to Row")
+                    
                     if save_btn:
                         df_deployments.at[idx, 'Location'] = e_loc
                         df_deployments.at[idx, 'Neighborhood'] = e_neigh
@@ -414,7 +448,8 @@ with tab3:
                         df_deployments.at[idx, 'Total Hours Deployed'] = e_hours
                         df_deployments.at[idx, 'Community Concerns / Purpose'] = e_concerns
                         
-                        if save_dataframe_to_gsheet(df_deployments):
+                        # 🎯 FIXED: Call targeted, index-specific row updater
+                        if update_gsheet_row(idx, df_deployments.loc[idx]):
                             st.cache_data.clear()
                             st.success("Google Sheets row synchronized successfully!")
                             st.rerun()
