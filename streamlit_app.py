@@ -105,7 +105,16 @@ def save_dataframe_to_gsheet(df_to_save):
             return False
     return False
 
-
+def safe_col(row, col, default=""):
+    # row is a pandas Series
+    try:
+        val = row.get(col, default)
+    except Exception:
+        val = default
+    if pd.isna(val):
+        return default
+    return val
+    
 # --- FETCH DATA ---
 df_deployments, sheet_api_client = load_data()
 
@@ -113,6 +122,14 @@ if not df_deployments.empty:
     # 1. Clean up hidden spaces from headers
     df_deployments.columns = df_deployments.columns.str.strip()
     
+    EXPECTED_COLUMNS = [
+        "Id", "Location", "Neighborhood", "Date", "Gang Affiliation", "Trigger Incident",
+        "Intel / Source", "Community Member Engaged", "Staff Count Attended",
+        "Total Hours Deployed", "Author", "Community Concerns / Purpose"
+    ]
+    for col in EXPECTED_COLUMNS:
+        if col not in df_deployments.columns:
+            df_deployments[col] = pd.NA
     # Convert ID to string to safely look for the word "END"
     id_series = df_deployments['Id'].astype(str).str.strip().str.upper()
     
